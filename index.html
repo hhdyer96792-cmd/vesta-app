@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Vesta Analytics Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg:#0f172a; --card:#1e293b; --acc:#38bdf8; --text:#f1f5f9; --red:#f87171; }
+        body { background:var(--bg); color:var(--text); font-family: -apple-system, sans-serif; margin:0; padding: env(safe-area-inset-top) 15px 30px 15px; }
+        .nav { display:flex; gap:8px; overflow-x:auto; margin-bottom:15px; padding:10px 0; scrollbar-width: none; }
+        .nav div { flex-shrink:0; padding:10px 14px; background:var(--card); border-radius:10px; font-size:11px; font-weight:800; border:1px solid #334155; }
+        .nav .active { background:var(--acc); color:#000; }
+        .card { background:var(--card); padding:18px; border-radius:20px; margin-bottom:12px; border:1px solid #334155; }
+        input, select, textarea { width:100%; padding:14px; margin:8px 0; border-radius:12px; border:1px solid #475569; background:#0f172a; color:white; font-size:16px; box-sizing:border-box; }
+        .btn { background:var(--acc); color:#000; border:none; padding:16px; border-radius:14px; width:100%; font-weight:800; font-size:16px; cursor:pointer; }
+        .btn-red { background:var(--red); color:white; margin-top:5px; padding:8px; font-size:12px; }
+        .item { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #334155; font-size:14px; }
+        .parts-badge { font-size:10px; background:#334155; padding:4px 8px; border-radius:6px; display:block; margin-top:5px; color:var(--acc); font-family: monospace; }
+        .chart-container { height: 180px; position: relative; }
+    </style>
+</head>
+<body>
+
+    <div class="nav">
+        <div id="t1" class="active" onclick="tab(1)">ОБЗОР</div>
+        <div id="t2" onclick="tab(2)">СЕРВИС</div>
+        <div id="t3" onclick="tab(3)">АЗС</div>
+        <div id="t4" onclick="tab(4)">АРХИВ</div>
+        <div id="t5" onclick="tab(5)">⚙️ ТО</div>
+    </div>
+
+    <div id="app">
+        <div id="p1">
+            <div class="card">
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1"><small>ПРОБЕГ, КМ</small><input type="number" id="cur-km"></div>
+                    <div style="flex:1"><small>МОТОЧАСЫ</small><input type="number" id="cur-h"></div>
+                </div>
+                <button class="btn" onclick="updateStats()">ОБНОВИТЬ СЧЕТЧИКИ</button>
+            </div>
+            <div class="card">
+                <h4>РЕСУРС МАСЛА (до 250 м/ч)</h4>
+                <div class="chart-container"><canvas id="oilChart"></canvas></div>
+            </div>
+            <div class="card" id="maintenance-list"></div>
+        </div>
+
+        <div id="p2" style="display:none">
+            <div class="card">
+                <h3>🔧 Запись работ</h3>
+                <select id="s-task-select"></select>
+                <input type="number" id="s-cost" placeholder="Стоимость, ₽">
+                <button class="btn" onclick="saveService()">ЗАПИСАТЬ И В КАЛЕНДАРЬ</button>
+            </div>
+        </div>
+
+        <div id="p3" style="display:none">
+            <div class="card">
+                <h3>⛽ Заправка</h3>
+                <input type="number" id="f-l" placeholder="Количество литров">
+                <input type="number" id="f-p" placeholder="Цена за литр">
+                <button class="btn" onclick="saveFuel()">ЗАПИСАТЬ</button>
+            </div>
+        </div>
+
+        <div id="p4" style="display:none">
+            <div id="history-list"></div>
+        </div>
+
+        <div id="p5" style="display:none">
+            <div class="card">
+                <h3>🛠️ Настройка регламента ТО</h3>
+                <input id="new-task" placeholder="Название (напр. ГРМ)">
+                <select id="new-type">
+                    <option value="Mileage">По пробегу (км)</option>
+                    <option value="Hours">По моточасам (м/ч)</option>
+                </select>
+                <input type="number" id="new-val" placeholder="Интервал (напр. 60000)">
+                <textarea id="new-parts" placeholder="OEM запчасти"></textarea>
+                <button class="btn" onclick="addMaintenanceRule()">ДОБАВИТЬ В ПЛАН</button>
+            </div>
+            <div id="admin-list"></div>
+        </div>
+    </div>
+
+<script>
+    // --- КОНФИГУРАЦИЯ ---
+    const SUPABASE_URL = 'https://aqadykgccwhlebzykrcq.supabase.co';
+  const SUPABASE_KEY = sb_publishable_9obwGRLZL51CzAKEgQMosg_D87L5J1J 'ТВОЙ_ANON_KEY_ИЗ_НАСТРОЕК';
+  const TG_TOKEN = '8712794502:AAHPboDckNXVW657jOz2OSs1mrn_NrkDoCc';
+  const TG_CHAT_ID = '172376220';
+
+    const _sb = supabase.createClient(S_URL, S_KEY);
+    let oilChart;
+
+    // Вкладки
+    async function tab(n) {
+        document.querySelectorAll('[id^="p"]').forEach(p => p.style.display = 'none');
+        document.getElementById('p'+n).style.display = 'block';
+        document.querySelectorAll('.nav div').forEach(d => d.classList.remove('active'));
+        document.getElementById('t'+n).classList.add('active');
+        if(n === 1) initAnalytics();
+        if(n === 2) fillServiceSelect();
+        if(n === 4) loadHistory();
+        if(n === 5) loadAdminSchedule();
+    }
+
+    // Уведомления Telegram
+    async function sendTg(text) {
+        if(!TG_TOKEN || !TG_CHAT_ID) return;
+        try {
+            await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({chat_id: TG_CHAT_ID, text: text, parse_mode: 'HTML'})
+            });
+        } catch(e) { console.error("TG Error", e); }
+    }
+
+    // Аналитика
+    async function initAnalytics() {
+        const { data: settings } = await _sb.from('settings').select('*');
+        const s = {}; settings.forEach(i => s[i.key] = i.value);
+        document.getElementById('cur-km').value = s.current_km;
+        document.getElementById('cur-h').value = s.current_h;
+
+        const remain = Math.max(0, 250 - (s.current_h % 250));
+        renderChart(remain);
+
+        const { data: sched } = await _sb.from('maintenance_schedule').select('*');
+        document.getElementById('maintenance-list').innerHTML = '<h4>ГРАФИК ТО</h4>' + sched.map(i => {
+            const prog = i.type === 'Mileage' ? (s.current_km % i.trigger_val) / i.trigger_val : (s.current_h % i.trigger_val) / i.trigger_val;
+            return `<div class="item">
+                <div style="max-width:70%"><b>${i.task}</b><br><small class="parts-badge">${i.parts_needed || 'OEM не указан'}</small></div>
+                <b style="color:${prog > 0.85 ? 'var(--red)' : 'var(--acc)'}">${Math.min(100, Math.round(prog * 100))}%</b>
+            </div>`;
+        }).join('');
+    }
+
+    function renderChart(remain) {
+        const ctx = document.getElementById('oilChart').getContext('2d');
+        if(oilChart) oilChart.destroy();
+        oilChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [remain, 250 - remain],
+                    backgroundColor: [remain < 25 ? '#f87171' : '#38bdf8', '#334155'],
+                    borderWidth: 0
+                }]
+            },
+            options: { cutout: '80%', plugins: { tooltip: {enabled: false} } }
+        });
+    }
+
+    async function updateStats() {
+        const km = document.getElementById('cur-km').value;
+        const h = document.getElementById('cur-h').value;
+        await _sb.from('settings').update({value: km}).eq('key', 'current_km');
+        await _sb.from('settings').update({value: h}).eq('key', 'current_h');
+        initAnalytics();
+        alert('Счетчики обновлены');
+    }
+
+    // Сервис
+    async function fillServiceSelect() {
+        const { data } = await _sb.from('maintenance_schedule').select('task');
+        document.getElementById('s-task-select').innerHTML = data.map(i => `<option>${i.task}</option>`).join('');
+    }
+
+    async function saveService() {
+        const task = document.getElementById('s-task-select').value;
+        const cost = document.getElementById('s-cost').value;
+        const km = document.getElementById('cur-km').value;
+        const h = document.getElementById('cur-h').value;
+
+        const { data } = await _sb.from('service_logs').insert({task, km, hours: h, cost}).select();
+        await _sb.from('history').insert({category: '🔧 Сервис', km, description: task, cost, table_ref: 'service_logs', record_id: data[0].id});
+        
+        await sendTg(`🔧 <b>НОВЫЙ СЕРВИС</b>\nРабота: ${task}\nПробег: ${km} км\nМоточасы: ${h}\nЦена: ${cost} ₽`);
+        
+        // Календарь
+        const d = new Date().toISOString().replace(/-|:|\.\d\d\d/g, "");
+        window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=ТО: ${task}&details=Пробег: ${km}км. Запчасти проверены.&dates=${d}/${d}`, '_blank');
+        
+        alert('Данные сохранены!'); tab(1);
+    }
+
+    // АЗС
+    async function saveFuel() {
+        const l = document.getElementById('f-l').value;
+        const p = document.getElementById('f-p').value;
+        const km = document.getElementById('cur-km').value;
+        const total = (l * p).toFixed(2);
+
+        const { data } = await _sb.from('fuel_logs').insert({liters: l, price: p, km, total}).select();
+        await _sb.from('history').insert({category: '⛽ АЗС', km, description: `${l} л (заправка)`, cost: total, table_ref: 'fuel_logs', record_id: data[0].id});
+        
+        await sendTg(`⛽ <b>ЗАПРАВКА</b>\nЛитры: ${l} л\nЦена: ${p} ₽/л\nИтого: ${total} ₽\nПробег: ${km} км`);
+        
+        alert('Заправка учтена!'); tab(1);
+    }
+
+    // Админка ТО
+    async function addMaintenanceRule() {
+        const task = document.getElementById('new-task').value;
+        const type = document.getElementById('new-type').value;
+        const trigger_val = document.getElementById('new-val').value;
+        const parts_needed = document.getElementById('new-parts').value;
+
+        await _sb.from('maintenance_schedule').insert({task, type, trigger_val, parts_needed});
+        alert("Правило добавлено");
+        loadAdminSchedule();
+    }
+
+    async function loadAdminSchedule() {
+        const { data } = await _sb.from('maintenance_schedule').select('*');
+        document.getElementById('admin-list').innerHTML = data.map(i => `
+            <div class="card" style="font
+
