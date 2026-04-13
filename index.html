@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Бортжурнал Весты</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --acc:#38bdf8; --text:#f1f5f9; }
+    body { background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, sans-serif; margin:0; padding: env(safe-area-inset-top) 15px 15px 15px; }
+    .nav { display:flex; gap:10px; overflow-x:auto; margin-bottom:20px; padding-bottom:10px; scrollbar-width: none; }
+    .nav div { flex-shrink:0; padding:12px 18px; background:var(--card); border-radius:12px; font-size:13px; font-weight:600; }
+    .nav .active { background:var(--acc); color:#000; }
+    .card { background:var(--card); padding:20px; border-radius:18px; margin-bottom:15px; border:1px solid #334155; }
+    input, select { width:100%; padding:14px; margin:8px 0; border-radius:12px; border:1px solid #475569; background:#0f172a; color:white; font-size:16px; box-sizing:border-box; }
+    .btn { background:var(--acc); color:#000; border:none; padding:16px; border-radius:14px; width:100%; font-weight:bold; font-size:16px; margin-top:10px; cursor:pointer; }
+    .img-preview { width:100%; border-radius:12px; display:none; margin:10px 0; border:1px solid var(--acc); }
+    .history-item { border-bottom: 1px solid #334155; padding: 10px 0; display:flex; justify-content:space-between; }
+  </style>
+</head>
+<body>
+
+  <div class="nav">
+    <div id="t1" class="active" onclick="tab(1)">СТАТУС</div>
+    <div id="t2" onclick="tab(2)">СЕРВИС</div>
+    <div id="t3" onclick="tab(3)">АЗС</div>
+    <div id="t4" onclick="tab(4)">ИСТОРИЯ</div>
+  </div>
+
+  <div id="app">
+    <div id="p1">
+      <div class="card">
+        <small>ТЕКУЩИЙ ПРОБЕГ:</small>
+        <h2 id="disp-km">0 км</h2>
+        <input type="number" id="in-km" placeholder="Новый пробег">
+        <button class="btn" onclick="updateKm()">ОБНОВИТЬ</button>
+      </div>
+    </div>
+
+    <div id="p2" style="display:none">
+      <div class="card">
+        <h3>🔧 Сервис</h3>
+        <input id="s-task" placeholder="Что сделали?">
+        <input type="number" id="s-cost" placeholder="Стоимость (общая), ₽">
+        <input type="file" accept="image/*" id="s-file" onchange="preview(this)">
+        <img class="img-preview" id="s-img">
+        <button class="btn" id="s-btn" onclick="saveService()">СОХРАНИТЬ</button>
+      </div>
+    </div>
+
+    <div id="p3" style="display:none">
+      <div class="card">
+        <h3>⛽ Заправка</h3>
+        <input type="number" id="f-l" placeholder="Литры">
+        <input type="number" id="f-p" placeholder="Цена за литр">
+        <input type="file" accept="image/*" capture="camera" id="f-file" onchange="preview(this)">
+        <img class="img-preview" id="f-img">
+        <button class="btn" id="f-btn" onclick="saveFuel()">ЗАПИСАТЬ</button>
+      </div>
+    </div>
+
+    <div id="p4" style="display:none">
+      <div id="hist-list"></div>
+    </div>
+  </div>
+
+<script>
+  // --- КОНФИГУРАЦИЯ ---
+  const SUPABASE_URL = 'https://aqadykgccwhlebzykrcq.supabase.co';
+  const SUPABASE_KEY = sb_publishable_9obwGRLZL51CzAKEgQMosg_D87L5J1J 'ТВОЙ_ANON_KEY_ИЗ_НАСТРОЕК';
+  const TG_TOKEN = '8712794502:AAHPboDckNXVW657jOz2OSs1mrn_NrkDoCc';
+  const TG_CHAT_ID = '172376220';
+
+  const supabase = exports.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  function tab(n) {
+    document.querySelectorAll('[id^="p"]').forEach(p => p.style.display = 'none');
+    document.getElementById('p'+n).style.display = 'block';
+    document.querySelectorAll('.nav div').forEach(d => d.classList.remove('active'));
+    document.getElementById('t'+n).classList.add('active');
+    if(n === 4) loadHistory();
+  }
+
+  function preview(el) {
+    const file = el.files[0];
+    const img = el.nextElementSibling;
+    img.src = URL.createObjectURL(file);
+    img.style.display = 'block';
+  }
+
+  async function uploadImg(file) {
+    if(!file) return null;
+    const name = `${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from('photos').upload(name, file);
+    if(error) return null;
+    const { data: urlData } = supabase.storage.from('photos').getPublicUrl(name);
+    return urlData.publicUrl;
+  }
+
+  async function sendTg(msg) {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({chat_id: TG_CHAT_ID, text: msg, parse_mode: 'HTML'})
+    });
+  }
+
+  async function updateKm() {
+    const km = document.getElementById('in-km').value;
+    await supabase.from('settings').update({value: km}).eq('key', 'current_km');
+    document.getElementById('disp-km').innerText = km + ' км';
+    alert('Пробег обновлен');
+  }
+
+  async function saveFuel() {
+    const btn = document.getElementById('f-btn');
+    btn.disabled = true; btn.innerText = 'Загрузка...';
+    
+    const l = document.getElementById('f-l').value;
+    const p = document.getElementById('f-p').value;
+    const { data: set } = await supabase.from('settings').select('value').eq('key', 'current_km').single();
+    const photo = await uploadImg(document.getElementById('f-file').files[0]);
+    
+    const total = l * p;
+    await supabase.from('fuel_logs').insert({liters: l, price: p, km: set.value, total: total, photo_url: photo});
+    await supabase.from('history').insert({category: 'АЗС', km: set.value, description: `Заправка ${l}л`, cost: total, photo_url: photo});
+    
+    await sendTg(`⛽ <b>Заправка!</b>\n${l}л по ${p}₽\nИтого: ${total}₽`);
+    alert('Готово!');
+    location.reload();
+  }
+
+  async function saveService() {
+    const btn = document.getElementById('s-btn');
+    btn.disabled = true;
+    const task = document.getElementById('s-task').value;
+    const cost = document.getElementById('s-cost').value;
+    const { data: set } = await supabase.from('settings').select('value').eq('key', 'current_km').single();
+    const photo = await uploadImg(document.getElementById('s-file').files[0]);
+
+    await supabase.from('service_logs').insert({task: task, part_cost: cost, km: set.value, photo_url: photo});
+    await supabase.from('history').insert({category: 'Сервис', km: set.value, description: task, cost: cost, photo_url: photo});
+    
+    await sendTg(`🔧 <b>Сервис!</b>\n${task}\nЦена: ${cost}₽`);
+    alert('Записано!');
+    location.reload();
+  }
+
+  async function loadHistory() {
+    const { data } = await supabase.from('history').select('*').order('created_at', {ascending: false});
+    document.getElementById('hist-list').innerHTML = data.map(h => `
+      <div class="history-item">
+        <div><b>${h.category}</b><br><small>${h.description}</small></div>
+        <div style="text-align:right"><b>${h.cost} ₽</b><br><small>${h.km} км</small></div>
+      </div>
+    `).join('');
+  }
+
+  // Загрузка начального пробега
+  async function init() {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'current_km').single();
+    if(data) document.getElementById('disp-km').innerText = data.value + ' км';
+  }
+  init();
+</script>
+</body>
+</html>
