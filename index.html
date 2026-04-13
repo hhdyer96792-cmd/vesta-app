@@ -3,37 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Vesta Control Center</title>
+    <title>Vesta OS Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg:#0f172a; --card:#1e293b; --acc:#38bdf8; --text:#f1f5f9; --red:#f87171; --green:#4ade80; }
-        body { background:var(--bg); color:var(--text); font-family: -apple-system, sans-serif; margin:0; padding: env(safe-area-inset-top) 10px 10px 10px; }
+        :root { --bg:#020617; --card:#1e293b; --acc:#06b6d4; --text:#f8fafc; --red:#ef4444; --green:#10b981; }
+        body { background:var(--bg); color:var(--text); font-family: 'Segoe UI', system-ui, sans-serif; margin:0; padding: env(safe-area-inset-top) 10px 20px 10px; }
         
-        .nav { display:flex; gap:6px; overflow-x:auto; margin-bottom:15px; padding:10px 0; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
-        .nav div { flex-shrink:0; padding:10px 14px; background:var(--card); border-radius:10px; font-size:10px; font-weight:800; border:1px solid #334155; cursor:pointer; text-transform:uppercase; transition:0.2s; }
-        .nav .active { background:var(--acc); color:#000; border-color:var(--acc); }
+        /* Навигация с улучшенным откликом */
+        .nav { display:flex; gap:8px; overflow-x:auto; margin-bottom:20px; padding:10px 5px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+        .nav div { flex-shrink:0; padding:12px 18px; background:var(--card); border-radius:14px; font-size:11px; font-weight:800; border:1px solid #334155; cursor:pointer; transition:0.3s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .nav .active { background:var(--acc); color:#000; border-color:var(--acc); box-shadow: 0 0 15px rgba(6,182,212,0.4); }
 
-        .card { background:var(--card); padding:15px; border-radius:18px; margin-bottom:12px; border:1px solid #334155; }
-        input, select, textarea { width:100%; padding:14px; margin:8px 0; border-radius:12px; border:1px solid #475569; background:#0f172a; color:white; font-size:16px; box-sizing:border-box; }
+        .card { background:var(--card); padding:20px; border-radius:24px; margin-bottom:15px; border:1px solid #334155; position:relative; overflow:hidden; }
+        .card::before { content:''; position:absolute; top:0; left:0; width:100%; height:4px; background:rgba(255,255,255,0.05); }
         
-        .btn { background:var(--acc); color:#000; border:none; padding:16px; border-radius:14px; width:100%; font-weight:800; font-size:15px; cursor:pointer; }
-        .btn:active { opacity:0.7; transform:scale(0.98); }
-        .btn-sub { background:#334155; color:var(--acc); padding:8px; font-size:11px; margin-top:5px; border:1px solid var(--acc); }
-        .btn-red { background:transparent; color:var(--red); border:1px solid var(--red); width:auto; padding:6px 10px; font-size:10px; }
-
-        .item { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #334155; }
-        .badge { font-size:10px; background:#0f172a; padding:4px 8px; border-radius:6px; color:var(--acc); margin-top:4px; display:inline-block; border:1px solid #334155; }
-        .chart-box { height:160px; position:relative; margin-top:10px; }
+        input, select, textarea { width:100%; padding:16px; margin:10px 0; border-radius:15px; border:1px solid #475569; background:#0f172a; color:white; font-size:16px; transition:0.3s; }
+        input:focus { border-color:var(--acc); outline:none; box-shadow: 0 0 0 2px rgba(6,182,212,0.2); }
+        
+        .btn { background:var(--acc); color:#000; border:none; padding:18px; border-radius:16px; width:100%; font-weight:900; font-size:16px; cursor:pointer; text-transform:uppercase; letter-spacing:1px; }
+        .btn:active { transform:scale(0.96); filter:brightness(1.2); }
+        
+        .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+        .item { padding:15px 0; border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center; }
+        .badge { font-size:10px; background:rgba(6,182,212,0.1); color:var(--acc); padding:5px 10px; border-radius:8px; margin-top:6px; display:inline-block; font-family:monospace; }
+        .chart-container { height:180px; position:relative; }
+        .del-btn { color:var(--red); font-weight:bold; cursor:pointer; padding:5px; }
     </style>
 </head>
 <body>
 
-    <div class="nav">
-        <div id="t1" class="active" onclick="tab(1)">ОБЗОР</div>
-        <div id="t2" onclick="tab(2)">СЕРВИС</div>
-        <div id="t3" onclick="tab(3)">АЗС</div>
-        <div id="t4" onclick="tab(4)">МОЙКА</div>
+    <div class="nav" id="nav">
+        <div class="active" onclick="tab(1)">ОБЗОР</div>
+        <div onclick="tab(2)">СЕРВИС</div>
+        <div onclick="tab(3)">АЗС</div>
+        <div onclick="tab(4)">МОЙКА</div>
+        <div onclick="tab(5)">ИСТОРИЯ</div>
+        <div onclick="tab(6)">⚙️ ПЛАН</div>
+    </div>
+
+    <div id="pages">
+        <div id="p1">
+            <div class="card">
+                <div class="grid-2">
+                    <div><small>ПРОБЕГ, КМ</small><input type="number" id="cur-km"></div>
+                    <div><small>ЧАСЫ (М/Ч)</small><input type="number" id="cur-h"></div>
+                </div>
+                <button class="btn" onclick="updateStats()">ОБНОВИТЬ СТАТУС</button>
+            </div>
+            <div class="card" style="text-align:center">
+                <h4>РЕСУРС МАСЛА (250 м/ч)</h4>
+                <div class="chart-container"><canvas id="oilChart"></canvas></div>
+            </div>
+            <div id="maint-list"></div>
+        </div>
+
+        <div id="p2" style="display:none">
+            <div class="card">
+                <h3>🔧 Новое обслуживание</h3>
+                <select id="s-task-sel"></select>
+                <input type="number" id="s-cost" placeholder="Стоимость запчастей и работ, ₽">
+                <button class="btn" onclick="saveService()">ВНЕСТИ В ЖУРНАЛ</button>
+            </div>
+        </div>
+
+        <div id="p3" style="display:none">
+            <div class="card">
+                <h3>⛽ Заправка в Самаре</h3>
+                <input type="number" id="f-l" placeholder="Количество литров">
+                <input type="number" id="f-p" placeholder="Цена за литр, ₽">
+                <button class="btn" onclick="saveFuel()">ЗАПИСАТЬ ТРАТЫ</button>
+            </div>
+            <div class="card"><canvas id="fuelChart"></canvas></div>
+        </div>
+
+        <div id="p4" style="display:none">
+            <div class="card">
+                <h3>🧼 Уход за кузовом</h3>
+                <select id="w-type">
+                    <option>Комплексная мойка</option>
+                    <option>Кузов + Коврики</option>
+                    <option>Самообслуживание</option>
+                    <option>Чернение и воск</option>
+                </select>
+                <input type="number" id="w-cost" placeholder="Цена, ₽">
+                <button class="btn" onclick="saveWash()">СОХРАНИТЬ</button>
+            </div>
+        </div>
+
+        <div id="p5" style="display:none">
+            <div id="history-box"></div>
+        </div>
+
+        <div id="p6" style="display:none">
+            <div class="card">
+                <h3 id="adm-title">🛠️ Настроить регламент</h3>
+                <input id="reg-task" placeholder="Название (напр. ГРМ)">
+                <select id="reg-type"><option value="Mileage">По пробегу (км)</option><option value="Hours">По часам (м/ч)</option></select>
+                <input type="number" id="reg-val" placeholder="Интервал">
+                <textarea id="reg-parts" placeholder="Запчасти и артикулы"></textarea>
+                <input type="hidden" id="edit-id">
+                <button class="btn" onclick="saveRule()">СОХРАНИТЬ ИЗМЕНЕНИЯ</button>
+            </div>
+            <div id="reg-admin-list"></div>
+        </div>
+    </div>
+
+<script>
+    // --- КОНФИГ (ТВОИ ДАННЫЕ) ---
+    const CONFIG = {
+        URL: 'ТВОЙ_SUPABASE_URL',
+        KEY: 'ТВОЙ_ANON_KEY',
+        TG_TOKEN: 'ТВОЙ_TG_TOKEN',
+        TG_CHAT: 'ТВОЙ_TG_CHAT_ID'
+    };
+
+    const _sb = supabase.createClient(CONFIG.URL, CONFIG.KEY);
+    let charts = {};
+
+    // 1. НАВИГАЦИЯ
+    async function tab(n) {
+        document.querySelectorAll('#pages > div').forEach(p => p.style.display = 'none');
+        document.getElementById('p'+n).style.display = 'block';
+        document.querySelectorAll('.nav div').forEach(d => d.classList.remove('active'));
+        document.querySelectorAll('.nav div')[n-1].classList.add('active');
+
+        if(n === 1) initDashboard();
+        if(n === 2) { const {data} = await _sb.from('maintenance_schedule').select('task'); document.getElementById('s-task-sel').innerHTML = data.map(i=>`<option>${i.task}</option>`).join(''); }
+        if(n === 3) initFuelChart();
+        if(n === 5) loadHistory();
+        if(n === 6) loadAdminList();
+    }
+
+    // 2. УВЕДОМЛЕНИЯ
+    async function notify(txt) {
+        if(!CONFIG.TG_TOKEN) return;
+        fetch(`https://api.telegram.org/bot${CONFIG.TG_TOKEN}/sendMessage`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({chat_id:CONFIG.TG_CHAT, text:txt, parse_mode:'HTML'})
+        });
+    }
+
+    // 3. ЛОГИКА ДАШБОРДА
+    async function initDashboard() {
+        const { data: set } = await _sb.from('settings').select('*');
+        const s = {}; set.forEach(i => s[i.key] = i.value);
+        document.getElementById('cur-km').value = s.current_km;
+        document.getElementById('cur-h').value = s.current_h;
+
+        const remain = Math.max(0, 250 - (s.current_h % 250));
+        const ctx = document.getElementById('oilChart').getContext('2d');
+        if(charts.oil) charts.oil.destroy();
+        charts.oil = new Chart(ctx, {
+            type:'doughnut',
+            data:{ datasets:[{ data:[remain, 250-remain], backgroundColor:[remain<30?'#ef4444':'#06b6d4', '#0f172a'], borderWidth:0 }] },
+            options:{ cutout:'85%', plugins:{tooltip:{enabled:false}} }
+        });
+
+        const { data: sched } = await _sb.from('maintenance_schedule').select('*');
+        document.getElementById('maint-list').innerHTML = '<h4 style="margin:20px 0 10px 10px">ПРЕДСТОЯЩИЕ РАБОТЫ</h4>' + sched.map(i => {
+            const prog = i.type === 'Mileage' ? (s.current_km % i.trigger_val) / i.trigger_val : (s.current_h % i.trigger_val) / i.trigger_val;
+            const p = Math.min(100, Math.round(prog * 100));
+            return `<div class="card" style="padding:15px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between">
+                    <b>${i.task}</b>
+                    <span style="color:${p > 85 ? 'var(--red)' : 'var(--acc)'}">${p}%</span>
+                </div>
+                <div class="badge">${i.parts_needed}</div>
+            </div>`;
+        }).join('');
+    }
+
+    async function updateStats() {
+        const km = document.getElementById('cur-km').value;
+        const h = document.getElementById('cur-h').value;
+        await _sb.from('settings').update({value: km}).eq('key', 'current_km');
+        await _sb.from('settings').update({value: h}).eq('key', 'current_h');
+        initDashboard();
+        alert('Показатели обновлены!');
+    }
+
+    // 4. ЗАПИСИ (СЕРВИС, АЗС, МОЙКА)
+    async function saveService() {
+        const task = document.getElementById('s-task-sel').value;
+        const cost = document.getElementById('s-cost').value;
+        const km = document.getElementById('cur-km').value;
+        const { data } = await _sb.from('service_logs').insert({task, km, cost}).select();
+        await _sb.from('history').insert({category:'🔧 Сервис', km, description:task, cost, table_ref:'service_logs', record_id:data[0].id});
+        notify(`🔧 <b>Сервис: ${task}</b>\nПробег: ${km} км\nСумма: ${cost} ₽`);
+        tab(1);
+    }
+
+    async function saveFuel() {
+        const l = document.getElementById('f-l').value;
+        const p = document.getElementById('f-p').value;
+        const km = document.getElementById('cur-km').value;
+        const total = (l*p).toFixed(2);
+        const { data } = await _sb.from('fuel_logs').insert({liters:l, price:p, km, total}).select();
+        await _sb.from('history').insert({category:'⛽ АЗС', km, description:`${l} л`, cost:total, table_ref:'fuel_logs', record_id:data[0].id});
+        notify(`⛽ <b>Заправка</b>\nОбъем: ${l} л\nПробег: ${km} км\nИтого: ${total} ₽`);
+        tab(1);
+    }
+
+    async function saveWash() {
+        const type = document.getElementById('w-type').value;
+        const cost = document.getElementById('w-cost').value;
+        const km = document.getElementById('cur-km').value;
+        const { data } = await _sb.from('wash_logs').insert({type, cost, km}).select();
+        await _sb.from('history').insert({category:'🧼 Мойка', km, description:type, cost, table_ref:'wash_logs', record_id:data[0].id});
+        tab(5);
+    }
+
+    // 5. РЕГЛАМЕНТ (CRUD)
+    async function loadAdminList() {
+        const { data } = await _sb.from('maintenance_schedule').select('*');
+        document.getElementById('reg-admin-list').innerHTML = data.map(i => `
+            <div class="card" style="font-size:13px">
+                <b>${i.task}</b> (${i.trigger_val} ${i.type=='Mileage'?'км':'м/ч'})
+                <div style="margin-top:10px; display:flex; gap:10px">
+                    <button class="btn" style="padding:10px; font-size:10px" onclick="editRule('${i.id}')">РЕДАКТИРОВАТЬ</button>
+                    <button class="btn" style="padding:10px; font-size:10px; background:var(--red); color:white" onclick="delRule('${i.id}')">УДАЛИТЬ</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function editRule(id) {
+        const { data } = await _sb.from('maintenance_schedule').select('*').eq('id', id).single();
+        document.getElementById('edit-id').value = data.id;
+        document.getElementById('reg-task').value = data.task;
+        document.getElementById('reg-type').value = data.type;
+        document.getElementById('reg-val').value = data.trigger_val;
+        document.getElementById('reg-parts').value = data.parts_needed;
+        document.getElementById('adm-title').innerText = "📝 Редактирование";
+        window.scrollTo(0,0);
+    }
+
+    async function saveRule() {
+        const id = document.getElementById('edit-id').value;
+        const task = document.getElementById('reg-task').value;
+        const type = document.getElementById('reg-type').value;
+        const val = document.getElementById('reg-val').value;
+        const parts = document.getElementById('reg-parts').value;
+
+        if(id) await _sb.from('maintenance_schedule').update({task, type, trigger_val:val, parts_needed:parts}).eq('id', id);
+        else await _sb.from('maintenance_schedule').insert({task, type, trigger_val:val, parts_needed:parts});
+        
+        location.reload(); 
+    }
+
+    async function delRule(id) { if(confirm('Удалить правило?')) { await _sb.from('maintenance_schedule').delete().eq('id', id); loadAdminList(); } }
+
+    // 6. ИСТОРИЯ
+    async function loadHistory() {
+        const { data } = await _sb.from('history').select('*').order('created_at', {ascending:false});
+        document.getElementById('history-box').innerHTML = data.map(i => `
+            <div class="item">
+                <div><b>${i.category}</b><br><small>${i.description} | ${i.km} км</small></div>
+                <div style="text-align:right"><b>${i.cost} ₽</b><br><span class="del-btn" onclick="delHist('${i.id}','${i.table_ref}','${i.record_id}')">✕</span></div>
+            </div>
+        `).join('');
+    }
+
+    async function delHist(id, table, rid) {
+        if(confirm('Удалить из архива?')) {
+            await _sb.from('history').delete().eq('id', id);
+            if(table && rid) await _sb.from(table).delete().eq('id', rid);
+            loadHistory();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => tab(1));
+</script>
+</body>
+</html>
         <div id="t5" onclick="tab(5)">АРХИВ</div>
         <div id="t6" onclick="tab(6)">⚙️ ТО</div>
     </div>
